@@ -1,5 +1,6 @@
 const express = require('express');
 const { nanoid } = require('nanoid');
+const bcrypt = require('bcrypt');
 const cors = require('cors');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
@@ -21,37 +22,208 @@ app.use((req, res, next) => {
 });
 
 let products = [
-    { id: nanoid(6), name: 'Товар 1', category: 'Категория 1', description: 'Описание 1', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 2', category: 'Категория 2', description: 'Описание 2', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 3', category: 'Категория 3', description: 'Описание 3', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 4', category: 'Категория 4', description: 'Описание 4', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 5', category: 'Категория 5', description: 'Описание 5', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 6', category: 'Категория 6', description: 'Описание 6', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 7', category: 'Категория 7', description: 'Описание 7', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 8', category: 'Категория 8', description: 'Описание 8', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 9', category: 'Категория 9', description: 'Описание 9', price: 1, stock: 1, rating: 1},
-    { id: nanoid(6), name: 'Товар 10', category: 'Категория 10', description: 'Описание 10', price: 1, stock: 1, rating: 1},
+    { id: nanoid(6), title: 'Товар 1', category: 'Категория 1', description: 'Описание 1', price: 1 },
+    { id: nanoid(6), title: 'Товар 2', category: 'Категория 2', description: 'Описание 2', price: 1 },
+    { id: nanoid(6), title: 'Товар 3', category: 'Категория 3', description: 'Описание 3', price: 1 },
+    { id: nanoid(6), title: 'Товар 4', category: 'Категория 4', description: 'Описание 4', price: 1 },
+    { id: nanoid(6), title: 'Товар 5', category: 'Категория 5', description: 'Описание 5', price: 1 },
 ];
+
+let users = [];
 
 function findProductOr404(id, res) {
     const product = products.find(p => p.id === id);
     if (!product) {
-        res.status(404).json({ error: 'Product not found' });
+        res.status(404).json({ error: 'Продукет не найден' });
         return null;
     }
     return product;
 }
 
+function findUserByEmail(email) {
+    return users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+}
+
+async function hashPassword(password) {
+    const rounds = 10;
+    return bcrypt.hash(password, rounds);
+}
+
+async function verifyPassword(password, passwordHash) {
+    return bcrypt.compare(password, passwordHash);
+}
+
 const swaggerOptions = {
     definition: {
         openapi: '3.0.0',
+        info: {
+            title: 'Practice API',
+            version: '1.0.0',
+            description: 'Практика: базовая аутентификация и CRUD товаров',
+        },
         servers: [{ url: `http://localhost:${port}` }],
+        components: {
+            schemas: {
+                Product: {
+                    type: 'object',
+                    required: ['id', 'title', 'category', 'description', 'price'],
+                    properties: {
+                        id: { type: 'string', example: 'ab12cd' },
+                        title: { type: 'string', example: 'Футболка' },
+                        category: { type: 'string', example: 'Одежда' },
+                        description: { type: 'string', example: 'Топовая футболка' },
+                        price: { type: 'number', example: 1500 },
+                    },
+                },
+                User: {
+                    type: 'object',
+                    required: ['id', 'email', 'first_name', 'last_name'],
+                    properties: {
+                        id: { type: 'string', example: 'u1a2b3' },
+                        email: { type: 'string', example: 'ivan@example.com' },
+                        first_name: { type: 'string', example: 'Иван' },
+                        last_name: { type: 'string', example: 'Иванов' },
+                    },
+                },
+            },
+        },
     },
     apis: ['./app.js'],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Регистрация пользователя
+ *     description: Создает нового пользователя (email как логин), пароль хешируется bcrypt
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, first_name, last_name, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: ivan@example.com
+ *               first_name:
+ *                 type: string
+ *                 example: Иван
+ *               last_name:
+ *                 type: string
+ *                 example: Иванов
+ *               password:
+ *                 type: string
+ *                 example: qwerty123
+ *     responses:
+ *       201:
+ *         description: Пользователь создан
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/User'
+ *                 - type: object
+ *                   properties:
+ *                     password:
+ *                       type: string
+ *                       description: Хеш пароля (для практики)
+ *       400:
+ *         description: Некорректные данные
+ *       409:
+ *         description: Email уже занят
+ */
+app.post('/api/auth/register', async (req, res, next) => {
+    try {
+        const { email, first_name, last_name, password } = req.body;
+        if (!email || !first_name || !last_name || !password) {
+            return res.status(400).json({ error: 'Почта, имя, фамилия и пароль обязательны' });
+        }
+        if (typeof email !== 'string' || !email.includes('@')) {
+            return res.status(400).json({ error: 'Это не почта' });
+        }
+        if (findUserByEmail(email)) {
+            return res.status(409).json({ error: 'Почта уже зарегистрирована' });
+        }
+        const user = {
+            id: nanoid(6),
+            email: email.trim(),
+            first_name: String(first_name).trim(),
+            last_name: String(last_name).trim(),
+            password: await hashPassword(String(password)),
+        };
+        users.push(user);
+        res.status(201).json(user);
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Вход в систему
+ *     description: Проверяет email и пароль пользователя
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: ivan@example.com
+ *               password:
+ *                 type: string
+ *                 example: qwerty123
+ *     responses:
+ *       200:
+ *         description: Успешная авторизация
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 login:
+ *                   type: boolean
+ *                   example: true
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Отсутствуют обязательные поля
+ *       401:
+ *         description: Неверные учетные данные
+ *       404:
+ *         description: Пользователь не найден
+ */
+app.post('/api/auth/login', async (req, res, next) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Почта и пароль обязательны' });
+        }
+        const user = findUserByEmail(String(email));
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+        const ok = await verifyPassword(String(password), user.password);
+        if (!ok) return res.status(401).json({ error: 'Ошибка авторизации' });
+
+        const { password: _pw, ...safeUser } = user;
+        res.status(200).json({ login: true, user: safeUser });
+    } catch (err) {
+        next(err);
+    }
+});
 
 /**
  * @swagger
@@ -140,18 +312,18 @@ app.get('/api/products/:id', (req, res) => {
  *         description: Неверные данные
  */
 app.post('/api/products', (req, res) => {
-    const { name, category, description, price, stock, rating } = req.body;
-    if (!name || price === undefined) {
-        return res.status(400).json({ error: 'Название и цена обязательны для заполнения!' });
+    const { title, category, description, price } = req.body;
+    const fallbackTitle = req.body?.name;
+    const actualTitle = title ?? fallbackTitle;
+    if (!actualTitle || price === undefined) {
+        return res.status(400).json({ error: 'Название и цена обязательны' });
     }
     const newProduct = {
         id: nanoid(6),
-        name: name.trim(),
-        category: category || '',
-        description: description || '',
+        title: String(actualTitle).trim(),
+        category: category ? String(category) : '',
+        description: description ? String(description) : '',
         price: Number(price),
-        stock: stock !== undefined ? Number(stock) : 0,
-        rating: rating !== undefined ? Number(rating) : null,
     };
     products.push(newProduct);
     res.status(201).json(newProduct);
@@ -160,8 +332,8 @@ app.post('/api/products', (req, res) => {
 /**
  * @swagger
  * /api/products/{id}:
- *   patch:
- *     summary: Обновляет существующий товар
+ *   put:
+ *     summary: Обновляет параметры товара
  *     tags: [Products]
  *     parameters:
  *       - in: path
@@ -177,7 +349,7 @@ app.post('/api/products', (req, res) => {
  *           schema:
  *             type: object
  *             properties:
- *               name:
+ *               title:
  *                 type: string
  *               category:
  *                 type: string
@@ -201,25 +373,30 @@ app.post('/api/products', (req, res) => {
  *       404:
  *         description: Товар не найден
  */
-app.patch('/api/products/:id', (req, res) => {
+function updateProductHandler(req, res) {
     const id = req.params.id;
     const product = findProductOr404(id, res);
     if (!product) return;
 
-    const { name, category, description, price, stock, rating } = req.body;
-    if (name === undefined && category === undefined && description === undefined && price === undefined && stock === undefined && rating === undefined) {
+    const { title, category, description, price } = req.body;
+    const fallbackTitle = req.body?.name;
+    const actualTitle = title ?? fallbackTitle;
+
+    if (actualTitle === undefined && category === undefined && description === undefined && price === undefined) {
         return res.status(400).json({ error: 'Нечего изменять' });
     }
 
-    if (name !== undefined) product.name = name.trim();
-    if (category !== undefined) product.category = category;
-    if (description !== undefined) product.description = description;
+    if (actualTitle !== undefined) product.title = String(actualTitle).trim();
+    if (category !== undefined) product.category = String(category);
+    if (description !== undefined) product.description = String(description);
     if (price !== undefined) product.price = Number(price);
-    if (stock !== undefined) product.stock = Number(stock);
-    if (rating !== undefined) product.rating = Number(rating);
 
     res.json(product);
-});
+}
+
+app.put('/api/products/:id', updateProductHandler);
+// Алиас на случай, если фронт/клиенты ещё отправляют PATCH
+app.patch('/api/products/:id', updateProductHandler);
 
 /**
  * @swagger
@@ -243,18 +420,18 @@ app.patch('/api/products/:id', (req, res) => {
 app.delete('/api/products/:id', (req, res) => {
     const id = req.params.id;
     const exists = products.some(p => p.id === id);
-    if (!exists) return res.status(404).json({ error: 'Product not found' });
+    if (!exists) return res.status(404).json({ error: 'Продукт не найден' });
     products = products.filter(p => p.id !== id);
     res.status(204).send();
 });
 
 app.use((req, res) => {
-    res.status(404).json({ error: 'Not found' });
+    res.status(404).json({ error: '404' });
 });
 
-app.use((err, req, res, next) => {
+app.use((err, req, res) => {
     console.error('Unhandled error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Ошибка серевера' });
 });
 
 app.listen(port, () => {
