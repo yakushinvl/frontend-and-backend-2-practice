@@ -32,8 +32,13 @@ let products = [
 
 let users = [];
 
-const JWT_SECRET = process.env.JWT_SECRET || 'access_secret';
+const ACCESS_SECRET = process.env.ACCESS_SECRET || process.env.JWT_SECRET || 'access_secret';
+const REFRESH_SECRET = process.env.REFRESH_SECRET || 'refresh_secret';
+
 const ACCESS_EXPIRES_IN = process.env.ACCESS_EXPIRES_IN || '15m';
+const REFRESH_EXPIRES_IN = process.env.REFRESH_EXPIRES_IN || '7d';
+
+const refreshTokens = new Set();
 
 function findProductOr404(id, res) {
     const product = products.find(p => p.id === id);
@@ -57,6 +62,22 @@ async function verifyPassword(password, passwordHash) {
     return bcrypt.compare(password, passwordHash);
 }
 
+function generateAccessToken(user) {
+    return jwt.sign(
+        { sub: user.id, email: user.email },
+        ACCESS_SECRET,
+        { expiresIn: ACCESS_EXPIRES_IN }
+    );
+}
+
+function generateRefreshToken(user) {
+    return jwt.sign(
+        { sub: user.id, email: user.email },
+        REFRESH_SECRET,
+        { expiresIn: REFRESH_EXPIRES_IN }
+    );
+}
+
 function authMiddleware(req, res, next) {
     const header = req.headers.authorization || '';
     const [scheme, token] = header.split(' ');
@@ -64,7 +85,7 @@ function authMiddleware(req, res, next) {
         return res.status(401).json({ error: 'Ошибка заголовка авторизации' });
     }
     try {
-        const payload = jwt.verify(token, JWT_SECRET);
+        const payload = jwt.verify(token, ACCESS_SECRET);
         req.user = payload; // { sub, email, iat, exp }
         next();
     } catch (err) {
@@ -223,6 +244,10 @@ app.post('/api/auth/register', async (req, res, next) => {
  *                 login:
  *                   type: boolean
  *                   example: true
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
  *                 user:
  *                   $ref: '#/components/schemas/User'
  *       400:
@@ -244,16 +269,84 @@ app.post('/api/auth/login', async (req, res, next) => {
         const ok = await verifyPassword(String(password), user.password);
         if (!ok) return res.status(401).json({ error: 'Ошибка авторизации' });
 
-        const accessToken = jwt.sign(
-            { sub: user.id, email: user.email },
-            JWT_SECRET,
-            { expiresIn: ACCESS_EXPIRES_IN }
-        );
+        const accessToken = generateAccessToken(user);
+        const refreshToken = generateRefreshToken(user);
+        refreshTokens.add(refreshToken);
 
         const { password: _pw, ...safeUser } = user;
-        res.status(200).json({ login: true, accessToken, user: safeUser });
+        res.status(200).json({ login: true, accessToken, refreshToken, user: safeUser });
     } catch (err) {
         next(err);
+    }
+});
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Обновление пары токенов
+ *     description: Получает refresh-токен из заголовков и выдаёт новую пару access+refresh (ротация)
+ *     tags: [Auth]
+ *     parameters:
+ *       - in: header
+ *         name: x-refresh-token
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Refresh-токен (можно передать и через Authorization: Bearer <refreshToken>)
+ *       - in: header
+ *         name: Authorization
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Bearer <refreshToken>
+ *     responses:
+ *       200:
+ *         description: Новая пара токенов
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [accessToken, refreshToken]
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *       400:
+ *         description: Отсутствует refresh-токен
+ *       401:
+ *         description: Refresh-токен невалиден или неактуален
+ */
+app.post('/api/auth/refresh', (req, res) => {
+    const refreshTokenFromHeader = req.headers['x-refresh-token'] || req.headers['refresh-token'];
+    const authHeader = req.headers.authorization || '';
+    const [scheme, bearerToken] = authHeader.split(' ');
+    const refreshToken = String(refreshTokenFromHeader || (scheme === 'Bearer' ? bearerToken : '')).trim();
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: 'refreshToken is required' });
+    }
+    if (!refreshTokens.has(refreshToken)) {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    try {
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+        const user = users.find((u) => u.id === payload.sub);
+        if (!user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+
+        // Ротация refresh-токена: старый удаляем, новый создаём
+        refreshTokens.delete(refreshToken);
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+        refreshTokens.add(newRefreshToken);
+
+        return res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 });
 
