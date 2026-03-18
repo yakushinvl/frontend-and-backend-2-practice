@@ -1,7 +1,7 @@
 import React from 'react';
 import ProductCard from './ProductCard';
 
-export default function ProductList({ products, onEdit, onDelete }) {
+export default function ProductList({ products, onEdit, onDelete, onDetails }) {
     if (!products.length) {
         return <div className="empty">Товаров пока нет</div>;
     }
@@ -14,6 +14,7 @@ export default function ProductList({ products, onEdit, onDelete }) {
                     product={product}
                     onEdit={onEdit}
                     onDelete={onDelete}
+                    onDetails={onDetails}
                 />
             ))}
         </div>

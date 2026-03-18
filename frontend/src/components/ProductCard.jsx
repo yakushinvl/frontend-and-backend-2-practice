@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function ProductCard({ product, onEdit, onDelete }) {
+export default function ProductCard({ product, onEdit, onDelete, onDetails }) {
     return (
         <div className="productRow">
             <div className="productMain">
@@ -9,6 +9,9 @@ export default function ProductCard({ product, onEdit, onDelete }) {
                 <div className="productPrice">{product.price} руб.</div>
             </div>
             <div className="productActions">
+                <button className="btn" onClick={() => onDetails?.(product.id)}>
+                    Подробнее
+                </button>
                 <button className="btn" onClick={() => onEdit(product)}>
                     Редактировать
                 </button>

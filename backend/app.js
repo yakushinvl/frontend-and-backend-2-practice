@@ -85,8 +85,7 @@ function authMiddleware(req, res, next) {
         return res.status(401).json({ error: 'Ошибка заголовка авторизации' });
     }
     try {
-        const payload = jwt.verify(token, ACCESS_SECRET);
-        req.user = payload; // { sub, email, iat, exp }
+        req.user = jwt.verify(token, ACCESS_SECRET); // { sub, email, iat, exp }
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Неправильный или просроченный токен' });
@@ -293,13 +292,13 @@ app.post('/api/auth/login', async (req, res, next) => {
  *         required: false
  *         schema:
  *           type: string
- *         description: Refresh-токен (можно передать и через Authorization: Bearer <refreshToken>)
+ *         description: "Refresh-токен (можно передать и через Authorization: Bearer <refreshToken>)"
  *       - in: header
  *         name: Authorization
  *         required: false
  *         schema:
  *           type: string
- *         description: Bearer <refreshToken>
+ *         description: "Bearer <refreshToken>"
  *     responses:
  *       200:
  *         description: Новая пара токенов
@@ -307,7 +306,9 @@ app.post('/api/auth/login', async (req, res, next) => {
  *           application/json:
  *             schema:
  *               type: object
- *               required: [accessToken, refreshToken]
+ *               required:
+ *                 - accessToken
+ *                 - refreshToken
  *               properties:
  *                 accessToken:
  *                   type: string
