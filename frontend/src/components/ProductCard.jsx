@@ -12,12 +12,16 @@ export default function ProductCard({ product, onEdit, onDelete, onDetails }) {
                 <button className="btn" onClick={() => onDetails?.(product.id)}>
                     Подробнее
                 </button>
-                <button className="btn" onClick={() => onEdit(product)}>
-                    Редактировать
-                </button>
-                <button className="btn btn--danger" onClick={() => onDelete(product.id)}>
-                    Удалить
-                </button>
+                {onEdit && (
+                    <button className="btn" onClick={() => onEdit(product)}>
+                        Редактировать
+                    </button>
+                )}
+                {onDelete && (
+                    <button className="btn btn--danger" onClick={() => onDelete(product.id)}>
+                        Удалить
+                    </button>
+                )}
             </div>
         </div>
     );

@@ -91,8 +91,8 @@ apiClient.interceptors.response.use(
 );
 
 export const api = {
-    register: async ({ email, first_name, last_name, password }) => {
-        const response = await apiClient.post('/auth/register', { email, first_name, last_name, password });
+    register: async ({ email, first_name, last_name, password, role }) => {
+        const response = await apiClient.post('/auth/register', { email, first_name, last_name, password, role });
         return response.data;
     },
     login: async ({ email, password }) => {
@@ -130,5 +130,18 @@ export const api = {
     deleteProduct: async (id) => {
         const response = await apiClient.delete(`/products/${id}`);
         return response.data;
+    },
+
+    // Users (admin)
+    getUsers: async () => {
+        const response = await apiClient.get('/users');
+        return response.data;
+    },
+    updateUser: async (id, payload) => {
+        const response = await apiClient.put(`/users/${id}`, payload);
+        return response.data;
+    },
+    blockUser: async (id) => {
+        await apiClient.delete(`/users/${id}`);
     },
 };

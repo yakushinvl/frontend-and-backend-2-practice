@@ -3,6 +3,7 @@ import './ProductsPage.scss';
 import ProductList from '../../components/ProductList';
 import ProductModal from '../../components/ProductModal';
 import ProductDetailsModal from '../../components/ProductDetailsModal';
+import UsersAdminPanel from '../../components/UsersAdminPanel';
 import { api } from '../../api';
 
 export default function ProductsPage({ onLogout }) {
@@ -14,6 +15,10 @@ export default function ProductsPage({ onLogout }) {
     const [me, setMe] = useState(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [detailsProduct, setDetailsProduct] = useState(null);
+
+    const role = me?.role;
+    const canEditProducts = role === 'seller' || role === 'admin';
+    const canDeleteProducts = role === 'admin';
 
     useEffect(() => {
         loadProducts();
@@ -109,13 +114,15 @@ export default function ProductsPage({ onLogout }) {
                         <div>
                             <h1 className="title">Товары</h1>
                             <div style={{ opacity: 0.8, fontSize: 12, marginTop: 4 }}>
-                                {me ? `Вы вошли как: ${me.email}` : 'Проверка токена...'}
+                                {me ? `Вы вошли как: ${me.email} (${me.role})` : 'Проверка токена...'}
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn btn--primary" onClick={openCreate}>
-                                + Создать
-                            </button>
+                            {canEditProducts && (
+                                <button className="btn btn--primary" onClick={openCreate}>
+                                    + Создать
+                                </button>
+                            )}
                             <button
                                 className="btn"
                                 onClick={() => {
@@ -133,8 +140,8 @@ export default function ProductsPage({ onLogout }) {
                     ) : (
                         <ProductList
                             products={products}
-                            onEdit={openEdit}
-                            onDelete={handleDelete}
+                            onEdit={canEditProducts ? openEdit : undefined}
+                            onDelete={canDeleteProducts ? handleDelete : undefined}
                             onDetails={handleDetails}
                         />
                     )}
@@ -157,6 +164,8 @@ export default function ProductsPage({ onLogout }) {
                     setDetailsProduct(null);
                 }}
             />
+
+            {me?.role === 'admin' && <UsersAdminPanel />}
         </div>
     );
 }

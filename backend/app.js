@@ -40,6 +40,8 @@ const REFRESH_EXPIRES_IN = process.env.REFRESH_EXPIRES_IN || '7d';
 
 const refreshTokens = new Set();
 
+const allowedRoles = ['user', 'seller', 'admin'];
+
 function findProductOr404(id, res) {
     const product = products.find(p => p.id === id);
     if (!product) {
@@ -64,7 +66,7 @@ async function verifyPassword(password, passwordHash) {
 
 function generateAccessToken(user) {
     return jwt.sign(
-        { sub: user.id, email: user.email },
+        { sub: user.id, email: user.email, role: user.role || 'user' },
         ACCESS_SECRET,
         { expiresIn: ACCESS_EXPIRES_IN }
     );
@@ -72,7 +74,7 @@ function generateAccessToken(user) {
 
 function generateRefreshToken(user) {
     return jwt.sign(
-        { sub: user.id, email: user.email },
+        { sub: user.id, email: user.email, role: user.role || 'user' },
         REFRESH_SECRET,
         { expiresIn: REFRESH_EXPIRES_IN }
     );
@@ -85,11 +87,31 @@ function authMiddleware(req, res, next) {
         return res.status(401).json({ error: 'Ошибка заголовка авторизации' });
     }
     try {
-        req.user = jwt.verify(token, ACCESS_SECRET); // { sub, email, iat, exp }
+        const payload = jwt.verify(token, ACCESS_SECRET); // { sub, email, role, iat, exp }
+        const user = users.find((u) => u.id === payload.sub);
+        if (!user || user.isBlocked) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        req.user = payload;
         next();
     } catch (err) {
         return res.status(401).json({ error: 'Неправильный или просроченный токен' });
     }
+}
+
+function roleMiddleware(allowedRolesList) {
+    return (req, res, next) => {
+        const role = req.user?.role;
+        if (!role || !allowedRolesList.includes(role)) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        next();
+    };
+}
+
+function getSafeUser(user) {
+    const { password: _pw, ...safeUser } = user;
+    return safeUser;
 }
 
 const swaggerOptions = {
@@ -187,7 +209,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
  */
 app.post('/api/auth/register', async (req, res, next) => {
     try {
-        const { email, first_name, last_name, password } = req.body;
+        const { email, first_name, last_name, password, role } = req.body;
         if (!email || !first_name || !last_name || !password) {
             return res.status(400).json({ error: 'Почта, имя, фамилия и пароль обязательны' });
         }
@@ -197,12 +219,20 @@ app.post('/api/auth/register', async (req, res, next) => {
         if (findUserByEmail(email)) {
             return res.status(409).json({ error: 'Почта уже зарегистрирована' });
         }
+
+        const actualRole = typeof role === 'string' ? role : 'user';
+        if (!allowedRoles.includes(actualRole)) {
+            return res.status(400).json({ error: 'Недопустимая роль' });
+        }
+
         const user = {
             id: nanoid(6),
             email: email.trim(),
             first_name: String(first_name).trim(),
             last_name: String(last_name).trim(),
             password: await hashPassword(String(password)),
+            role: actualRole,
+            isBlocked: false,
         };
         users.push(user);
         res.status(201).json(user);
@@ -264,6 +294,8 @@ app.post('/api/auth/login', async (req, res, next) => {
         }
         const user = findUserByEmail(String(email));
         if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+        if (user.isBlocked) return res.status(403).json({ error: 'Forbidden' });
 
         const ok = await verifyPassword(String(password), user.password);
         if (!ok) return res.status(401).json({ error: 'Ошибка авторизации' });
@@ -338,6 +370,9 @@ app.post('/api/auth/refresh', (req, res) => {
         if (!user) {
             return res.status(401).json({ error: 'User not found' });
         }
+        if (user.isBlocked) {
+            return res.status(401).json({ error: 'User is blocked' });
+        }
 
         // Ротация refresh-токена: старый удаляем, новый создаём
         refreshTokens.delete(refreshToken);
@@ -376,8 +411,62 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
     const userId = req.user?.sub;
     const user = users.find((u) => u.id === userId);
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-    const { password: _pw, ...safeUser } = user;
-    res.json(safeUser);
+    res.json(getSafeUser(user));
+});
+
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Получить список пользователей (admin)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ */
+app.get('/api/users', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+    res.json(users.map(getSafeUser));
+});
+
+app.get('/api/users/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+    const user = users.find((u) => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(getSafeUser(user));
+});
+
+app.put('/api/users/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+    const user = users.find((u) => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const { email, first_name, last_name, role } = req.body;
+
+    if (email !== undefined) {
+        if (typeof email !== 'string' || !email.includes('@')) {
+            return res.status(400).json({ error: 'Invalid email' });
+        }
+        const existing = users.find(
+            (u) => u.email.toLowerCase() === String(email).toLowerCase() && u.id !== user.id
+        );
+        if (existing) return res.status(409).json({ error: 'Email already exists' });
+        user.email = String(email).trim();
+    }
+    if (first_name !== undefined) user.first_name = String(first_name).trim();
+    if (last_name !== undefined) user.last_name = String(last_name).trim();
+    if (role !== undefined) {
+        const actualRole = String(role);
+        if (!allowedRoles.includes(actualRole)) {
+            return res.status(400).json({ error: 'Недопустимая роль' });
+        }
+        user.role = actualRole;
+    }
+
+    res.json(getSafeUser(user));
+});
+
+app.delete('/api/users/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
+    const user = users.find((u) => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    user.isBlocked = true;
+    res.status(204).send();
 });
 
 /**
@@ -396,7 +485,7 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
  *               items:
  *                 $ref: '#/components/schemas/Product'
  */
-app.get('/api/products', (req, res) => {
+app.get('/api/products', authMiddleware, roleMiddleware(['user', 'seller', 'admin']), (req, res) => {
     res.json(products);
 });
 
@@ -425,7 +514,7 @@ app.get('/api/products', (req, res) => {
  *       404:
  *         description: Товар не найден
  */
-app.get('/api/products/:id', authMiddleware, (req, res) => {
+app.get('/api/products/:id', authMiddleware, roleMiddleware(['user', 'seller', 'admin']), (req, res) => {
     const product = findProductOr404(req.params.id, res);
     if (product) res.json(product);
 });
@@ -468,7 +557,7 @@ app.get('/api/products/:id', authMiddleware, (req, res) => {
  *       400:
  *         description: Неверные данные
  */
-app.post('/api/products', (req, res) => {
+app.post('/api/products', authMiddleware, roleMiddleware(['seller', 'admin']), (req, res) => {
     const { title, category, description, price } = req.body;
     const fallbackTitle = req.body?.name;
     const actualTitle = title ?? fallbackTitle;
@@ -553,9 +642,9 @@ function updateProductHandler(req, res) {
     res.json(product);
 }
 
-app.put('/api/products/:id', authMiddleware, updateProductHandler);
+app.put('/api/products/:id', authMiddleware, roleMiddleware(['seller', 'admin']), updateProductHandler);
 // Алиас на случай, если фронт/клиенты ещё отправляют PATCH
-app.patch('/api/products/:id', authMiddleware, updateProductHandler);
+app.patch('/api/products/:id', authMiddleware, roleMiddleware(['seller', 'admin']), updateProductHandler);
 
 /**
  * @swagger
@@ -578,7 +667,7 @@ app.patch('/api/products/:id', authMiddleware, updateProductHandler);
  *       404:
  *         description: Товар не найден
  */
-app.delete('/api/products/:id', authMiddleware, (req, res) => {
+app.delete('/api/products/:id', authMiddleware, roleMiddleware(['admin']), (req, res) => {
     const id = req.params.id;
     const exists = products.some(p => p.id === id);
     if (!exists) return res.status(404).json({ error: 'Продукт не найден' });

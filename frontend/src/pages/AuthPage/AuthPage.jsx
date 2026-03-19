@@ -10,6 +10,7 @@ export default function AuthPage({ onAuthed }) {
     const [password, setPassword] = useState('');
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
+    const [role, setRole] = useState('user'); // user | seller | admin
     const [loading, setLoading] = useState(false);
 
     const canSubmit = useMemo(() => {
@@ -31,6 +32,7 @@ export default function AuthPage({ onAuthed }) {
                     first_name: firstName.trim(),
                     last_name: lastName.trim(),
                     password,
+                    role,
                 });
                 await api.login({ email: email.trim(), password });
             }
@@ -88,6 +90,19 @@ export default function AuthPage({ onAuthed }) {
                                             onChange={(e) => setLastName(e.target.value)}
                                             placeholder="Иванов"
                                         />
+                                    </label>
+
+                                    <label className="label">
+                                        Роль
+                                        <select
+                                            className="input"
+                                            value={role}
+                                            onChange={(e) => setRole(e.target.value)}
+                                        >
+                                            <option value="user">Пользователь</option>
+                                            <option value="seller">Продавец</option>
+                                            <option value="admin">Администратор</option>
+                                        </select>
                                     </label>
                                 </>
                             )}
