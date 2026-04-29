@@ -1,0 +1,11 @@
+{
+  "name": "todo-offline-pwa",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "http-server -p 5174 -c-1 ."
+  },
+  "private": true,
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
