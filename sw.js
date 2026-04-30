@@ -58,7 +58,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  let data = { title: "Новое уведомление", body: "" };
+  let data = { title: "Новое уведомление", body: "", reminderId: null };
   try {
     if (event.data) data = event.data.json();
   } catch {}
@@ -67,15 +67,34 @@ self.addEventListener("push", (event) => {
     body: data.body,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    data: { url: "/" },
+    data: { url: "/", reminderId: data.reminderId ?? null },
   };
+
+  if (data.reminderId) {
+    options.actions = [{ action: "snooze", title: "Отложить на 5 минут" }];
+  }
 
   event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const url = event.notification?.data?.url || "/";
+  const notification = event.notification;
+  const action = event.action;
+
+  if (action === "snooze") {
+    const reminderId = notification?.data?.reminderId;
+    notification.close();
+    if (!reminderId) return;
+    event.waitUntil(
+      fetch(`/snooze?reminderId=${encodeURIComponent(reminderId)}`, { method: "POST" }).catch((err) =>
+        console.error("Snooze failed:", err),
+      ),
+    );
+    return;
+  }
+
+  notification.close();
+  const url = notification?.data?.url || "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {

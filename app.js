@@ -8,7 +8,9 @@ const aboutBtn = document.getElementById("about-btn");
 const enablePushBtn = document.getElementById("enable-push");
 const disablePushBtn = document.getElementById("disable-push");
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+// Публичный VAPID-ключ (из `npx web-push generate-vapid-keys`)
+const VAPID_PUBLIC_KEY =
+  "BN9twJ4fECIKHACCjVDaYEppLu7j5XMsAZZScIwpzlk8uVHMXVpVqphrbx2SSukAqLeA8GHNkLz3jDp2awTE4RY";
 
 /** @type {ReturnType<typeof io> | null} */
 let socket = null;
@@ -54,7 +56,13 @@ function upsertRemoteTask(task) {
   const todos = loadTodos();
   const exists = todos.some((t) => t.id === task.id);
   if (exists) return;
-  todos.unshift({ id: task.id, text: task.text, done: false, createdAt: task.createdAt ?? Date.now() });
+  todos.unshift({
+    id: task.id,
+    text: task.text,
+    done: false,
+    createdAt: task.createdAt ?? Date.now(),
+    reminder: task.reminder ?? null,
+  });
   saveTodos(todos);
   if (currentListEl) render(currentListEl);
 }
@@ -74,7 +82,11 @@ function render(list) {
     cb.addEventListener("change", () => toggle(todo.id));
 
     const text = document.createElement("span");
-    text.textContent = todo.text;
+    const reminderPart =
+      todo.reminder && Number.isFinite(todo.reminder)
+        ? ` (напомнить: ${new Date(todo.reminder).toLocaleString()})`
+        : "";
+    text.textContent = `${todo.text}${reminderPart}`;
 
     const del = document.createElement("button");
     del.type = "button";
@@ -108,6 +120,9 @@ function remove(id) {
 function initTodos() {
   const form = document.getElementById("todo-form");
   const input = document.getElementById("todo-input");
+  const reminderForm = document.getElementById("reminder-form");
+  const reminderText = document.getElementById("reminder-text");
+  const reminderTime = document.getElementById("reminder-time");
   const list = document.getElementById("todo-list");
 
   if (!form || !input || !list) return;
@@ -124,7 +139,7 @@ function initTodos() {
     const id = uid();
     const createdAt = Date.now();
     const todos = loadTodos();
-    todos.unshift({ id, text, done: false, createdAt });
+    todos.unshift({ id, text, done: false, createdAt, reminder: null });
     saveTodos(todos);
 
     if (socket) socket.emit("newTask", { id, text, createdAt });
@@ -132,6 +147,35 @@ function initTodos() {
     input.focus();
     rerender();
   });
+
+  if (reminderForm && reminderText && reminderTime) {
+    reminderForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = reminderText.value.trim();
+      const datetime = reminderTime.value;
+      if (!text || !datetime) return;
+
+      const reminderTimestamp = new Date(datetime).getTime();
+      if (!Number.isFinite(reminderTimestamp) || reminderTimestamp <= Date.now()) {
+        alert("Дата напоминания должна быть в будущем");
+        return;
+      }
+
+      const id = uid();
+      const createdAt = Date.now();
+      const todos = loadTodos();
+      todos.unshift({ id, text, done: false, createdAt, reminder: reminderTimestamp });
+      saveTodos(todos);
+
+      if (socket) {
+        socket.emit("newReminder", { id, text, reminderTime: reminderTimestamp });
+      }
+
+      reminderText.value = "";
+      reminderTime.value = "";
+      rerender();
+    });
+  }
 
   rerender();
 }
