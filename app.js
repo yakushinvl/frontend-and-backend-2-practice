@@ -8,9 +8,7 @@ const aboutBtn = document.getElementById("about-btn");
 const enablePushBtn = document.getElementById("enable-push");
 const disablePushBtn = document.getElementById("disable-push");
 
-// Публичный VAPID-ключ (из `npx web-push generate-vapid-keys`)
-const VAPID_PUBLIC_KEY =
-  "BN9twJ4fECIKHACCjVDaYEppLu7j5XMsAZZScIwpzlk8uVHMXVpVqphrbx2SSukAqLeA8GHNkLz3jDp2awTE4RY";
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 
 /** @type {ReturnType<typeof io> | null} */
 let socket = null;

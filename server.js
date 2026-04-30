@@ -8,10 +8,8 @@ const webpush = require("web-push");
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 
 const vapidKeys = {
-    publicKey:
-        process.env.VAPID_PUBLIC_KEY ||
-        "BN9twJ4fECIKHACCjVDaYEppLu7j5XMsAZZScIwpzlk8uVHMXVpVqphrbx2SSukAqLeA8GHNkLz3jDp2awTE4RY",
-    privateKey: process.env.VAPID_PRIVATE_KEY || "6nWlAp1VITxN0ywpHrG7KbRZGQ7vYXndMrtho5XlSww",
+    publicKey: process.env.VAPID_PUBLIC_KEY,
+    privateKey: process.env.VAPID_PRIVATE_KEY,
 };
 
 webpush.setVapidDetails("mailto:student@example.com", vapidKeys.publicKey, vapidKeys.privateKey);
