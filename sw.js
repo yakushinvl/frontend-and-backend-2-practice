@@ -10,7 +10,6 @@ const SHELL_ASSETS = [
   "/icons/icon-192.png",
   "/icons/icon-256.png",
   "/icons/icon-512.png",
-  // Нужен как офлайн-фолбэк для динамического контента
   "/content/home.html",
 ];
 
@@ -35,13 +34,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // App Shell (index) должен открываться мгновенно даже офлайн
   if (request.mode === "navigate") {
     event.respondWith(caches.match("/index.html").then((r) => r || fetch(request)));
     return;
   }
 
-  // Динамический контент: Network First, fallback на кэш и затем на home
   if (url.pathname.startsWith("/content/")) {
     event.respondWith(
       fetch(request)
@@ -57,6 +54,37 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Статика (каркас): Cache First
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+});
+
+self.addEventListener("push", (event) => {
+  let data = { title: "Новое уведомление", body: "" };
+  try {
+    if (event.data) data = event.data.json();
+  } catch {}
+
+  const options = {
+    body: data.body,
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    data: { url: "/" },
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification?.data?.url || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          client.focus();
+          return;
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    }),
+  );
 });

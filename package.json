@@ -3,9 +3,16 @@
   "version": "1.0.0",
   "scripts": {
     "start": "http-server -p 5174 -c-1 .",
-    "start:https": "http-server --ssl --cert localhost.pem --key localhost-key.pem -p 5174 -c-1 ."
+    "start:https": "http-server --ssl --cert localhost.pem --key localhost-key.pem -p 5174 -c-1 .",
+    "server": "node server.js"
   },
   "private": true,
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "web-push": "^3.6.7"
+  },
   "devDependencies": {
     "http-server": "^14.1.1"
   }

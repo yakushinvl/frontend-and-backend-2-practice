@@ -72,3 +72,10 @@ li.done span {
   color: #666;
   font-size: 14px;
 }
+
+.footer {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>ToDo (App Shell)</title>
+    <title>ToDo</title>
 
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#2563eb" />
@@ -29,10 +29,16 @@
 
       <section id="app-content" aria-live="polite"></section>
 
+      <footer class="footer">
+        <button id="enable-push" type="button">Включить уведомления</button>
+        <button id="disable-push" type="button" style="display: none">Отключить уведомления</button>
+      </footer>
+
       <p id="sw-status"></p>
     </main>
 
     <noscript>Для работы приложения нужен JavaScript.</noscript>
+    <script src="/socket.io/socket.io.js" defer></script>
     <script src="/app.js" defer></script>
   </body>
 </html>
