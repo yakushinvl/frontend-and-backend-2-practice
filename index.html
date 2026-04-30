@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>ToDo (офлайн)</title>
+    <title>ToDo (App Shell)</title>
 
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#2563eb" />
@@ -19,14 +19,15 @@
   </head>
   <body>
     <main>
-      <h1>Список дел</h1>
+      <header>
+        <h1>Список дел</h1>
+        <nav>
+          <button id="home-btn" type="button" class="tab active">Главная</button>
+          <button id="about-btn" type="button" class="tab">О приложении</button>
+        </nav>
+      </header>
 
-      <form id="todo-form" autocomplete="off">
-        <input id="todo-input" type="text" placeholder="Новая задача" required />
-        <button type="submit">Добавить</button>
-      </form>
-
-      <ul id="todo-list"></ul>
+      <section id="app-content" aria-live="polite"></section>
 
       <p id="sw-status"></p>
     </main>

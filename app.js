@@ -1,9 +1,14 @@
 const STORAGE_KEY = "todos-v1";
 
-const form = document.getElementById("todo-form");
-const input = document.getElementById("todo-input");
-const list = document.getElementById("todo-list");
 const swStatus = document.getElementById("sw-status");
+const content = document.getElementById("app-content");
+const homeBtn = document.getElementById("home-btn");
+const aboutBtn = document.getElementById("about-btn");
+
+function setActive(active) {
+  homeBtn.classList.toggle("active", active === "home");
+  aboutBtn.classList.toggle("active", active === "about");
+}
 
 function loadTodos() {
   try {
@@ -23,7 +28,7 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function render() {
+function render(list) {
   const todos = loadTodos();
   list.innerHTML = "";
 
@@ -54,7 +59,6 @@ function add(text) {
   const todos = loadTodos();
   todos.unshift({ id: uid(), text, done: false, createdAt: Date.now() });
   saveTodos(todos);
-  render();
 }
 
 function toggle(id) {
@@ -63,25 +67,62 @@ function toggle(id) {
   if (!t) return;
   t.done = !t.done;
   saveTodos(todos);
-  render();
 }
 
 function remove(id) {
   const todos = loadTodos().filter((x) => x.id !== id);
   saveTodos(todos);
-  render();
 }
 
-form.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text) return;
-  add(text);
-  input.value = "";
-  input.focus();
+function initTodos() {
+  const form = document.getElementById("todo-form");
+  const input = document.getElementById("todo-input");
+  const list = document.getElementById("todo-list");
+
+  if (!form || !input || !list) return;
+
+  function rerender() {
+    render(list);
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    add(text);
+    input.value = "";
+    input.focus();
+    rerender();
+  });
+
+  rerender();
+}
+
+async function loadContent(page) {
+  try {
+    const res = await fetch(`/content/${page}.html`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    content.innerHTML = await res.text();
+
+    if (page === "home") initTodos();
+  } catch (e) {
+    content.innerHTML = "<p>Ошибка загрузки страницы.</p>";
+    console.error(e);
+  }
+}
+
+homeBtn.addEventListener("click", () => {
+  setActive("home");
+  loadContent("home");
 });
 
-render();
+aboutBtn.addEventListener("click", () => {
+  setActive("about");
+  loadContent("about");
+});
+
+setActive("home");
+loadContent("home");
 
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {

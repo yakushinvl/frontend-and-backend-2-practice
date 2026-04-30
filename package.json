@@ -2,7 +2,8 @@
   "name": "todo-offline-pwa",
   "version": "1.0.0",
   "scripts": {
-    "start": "http-server -p 5174 -c-1 ."
+    "start": "http-server -p 5174 -c-1 .",
+    "start:https": "http-server --ssl --cert localhost.pem --key localhost-key.pem -p 5174 -c-1 ."
   },
   "private": true,
   "devDependencies": {

@@ -9,6 +9,28 @@ body {
   max-width: 640px;
 }
 
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+nav {
+  display: flex;
+  gap: 8px;
+}
+
+.tab {
+  padding: 8px 10px;
+}
+
+.tab.active {
+  font-weight: 700;
+}
+
 form {
   display: flex;
   gap: 8px;
