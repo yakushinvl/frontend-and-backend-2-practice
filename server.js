@@ -1,7 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const https = require("https");
-const fs = require("fs");
+const http = require("http");
 const path = require("path");
 const cors = require("cors");
 const { Server } = require("socket.io");
@@ -25,15 +24,9 @@ app.use(express.static(path.join(__dirname, "./")));
 /** @type {import('web-push').PushSubscription[]} */
 let subscriptions = [];
 
-// Активные напоминания: id -> { timeoutId, text, reminderTime }
 const reminders = new Map();
 
-const options = {
-    key: fs.readFileSync("localhost-key.pem"),
-    cert: fs.readFileSync("localhost.pem"),
-};
-
-const server = https.createServer(options, app);
+const server = http.createServer(app);
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] },
 });
@@ -75,7 +68,7 @@ io.on("connection", (socket) => {
 
         const timeoutId = setTimeout(() => {
             const payload = JSON.stringify({
-                title: "!!! Напоминание",
+                title: "Напоминание",
                 body: text,
                 reminderId: id,
             });
@@ -89,7 +82,7 @@ io.on("connection", (socket) => {
         reminders.set(id, { timeoutId, text, reminderTime: Number(reminderTime) });
     });
 
-    socket.on("disconnect", () => console.log("Клиент отключён:", socket.id));
+    socket.on("disconnect", () => console.log("Клиент подключён:", socket.id));
 });
 
 app.post("/subscribe", (req, res) => {
@@ -135,6 +128,5 @@ app.post("/snooze", (req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Сервер запущен на https://localhost:${PORT}`);
+    console.log(`Сервер запущен на http://localhost:${PORT}`);
 });
-

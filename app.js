@@ -1,6 +1,6 @@
 const STORAGE_KEY = "todos-v1";
 const VAPID_PUBLIC_KEY = "BCxdOsmll-UVV-NbEEkj1M9jST-8pq-Avo_GhlNbF_uZkvcyekYbPtqxDZwMYjE16QFiZXK44fSwEUMa5-38voQ";
-const SERVER_URL = "https://localhost:3001";
+const SERVER_URL = "http://localhost:3001";
 
 const swStatus = document.getElementById("sw-status");
 const content = document.getElementById("app-content");
@@ -12,7 +12,6 @@ const disablePushBtn = document.getElementById("disable-push");
 let socket = null;
 let currentListEl = null;
 
-// --- Utils ---
 function toast(message) {
   const el = document.createElement("div");
   el.textContent = message;
@@ -49,7 +48,6 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// --- Logic ---
 function render(list) {
   const todos = loadTodos();
   list.innerHTML = "";
@@ -71,7 +69,7 @@ function render(list) {
     const text = document.createElement("span");
     let reminderText = "";
     if (todo.reminder) {
-      reminderText = ` (⏰ ${new Date(todo.reminder).toLocaleString()})`;
+      reminderText = ` (${new Date(todo.reminder).toLocaleString()})`;
     }
     text.textContent = todo.text + reminderText;
 
@@ -197,11 +195,9 @@ async function unsubscribe() {
   }
 }
 
-// --- Init ---
 window.addEventListener("load", async () => {
   console.log("App loaded, starting initialization...");
 
-  // SW Registration
   if ("serviceWorker" in navigator) {
     try {
       console.log("Registering Service Worker...");
@@ -216,18 +212,15 @@ window.addEventListener("load", async () => {
       }
     } catch (err) {
       console.error("Service Worker registration failed:", err);
-      swStatus.textContent = "Ошибка Service Worker: " + err.message + ". Попробуйте открыть https://localhost:5174/sw.js и подтвердить сертификат.";
+      swStatus.textContent = "Ошибка Service Worker: " + err.message;
     }
   } else {
     swStatus.textContent = "Service Worker не поддерживается";
   }
 
-  // Socket
   if (window.io) {
     try {
-      socket = window.io(SERVER_URL, {
-        rejectUnauthorized: false // Allow self-signed certs for socket.io
-      });
+      socket = window.io(SERVER_URL);
       socket.on("connect", () => console.log("Socket connected"));
       socket.on("taskAdded", (task) => {
         toast("Новая задача: " + task.text);
@@ -237,7 +230,6 @@ window.addEventListener("load", async () => {
     }
   }
 
-  // UI Events
   homeBtn.onclick = () => loadPage("home");
   aboutBtn.onclick = () => loadPage("about");
   enablePushBtn.onclick = subscribe;

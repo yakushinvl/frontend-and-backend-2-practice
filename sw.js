@@ -11,7 +11,6 @@ const ASSETS = [
   '/icons/icon-512.png'
 ];
 
-// Install event - caching assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -22,7 +21,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate event - cleaning up old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -34,7 +32,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - cache first, then network
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -45,7 +42,6 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(event.request).then((response) => {
-        // Don't cache if not a valid response or if it's from another origin
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
@@ -57,7 +53,6 @@ self.addEventListener('fetch', (event) => {
 
         return response;
       }).catch(() => {
-        // Offline fallback for navigation
         if (event.request.mode === 'navigate') {
           return caches.match('/index.html');
         }
@@ -66,7 +61,6 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push event - showing notification
 self.addEventListener('push', (event) => {
   console.log('[SW] Push received');
   let data = {};
@@ -96,7 +90,6 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Notification click event
 self.addEventListener('notificationclick', (event) => {
   const notification = event.notification;
   const action = event.action;
