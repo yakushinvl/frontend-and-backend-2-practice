@@ -1,109 +1,129 @@
-const SHELL_CACHE = "app-shell-v1";
-const DYNAMIC_CACHE = "dynamic-content-v1";
-
-const SHELL_ASSETS = [
-  "/",
-  "/index.html",
-  "/style.css",
-  "/app.js",
-  "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-256.png",
-  "/icons/icon-512.png",
-  "/content/home.html",
+const CACHE_NAME = 'todo-pwa-v1';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app.js',
+  '/manifest.json',
+  '/content/home.html',
+  '/content/about.html',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
 ];
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_ASSETS)));
+// Install event - caching assets
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      console.log('[SW] Caching assets');
+      return cache.addAll(ASSETS);
+    })
+  );
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
+// Activate event - cleaning up old caches
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DYNAMIC_CACHE).map((k) => caches.delete(k))),
-    ),
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      );
+    })
   );
   self.clients.claim();
 });
 
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  if (request.method !== "GET") return;
+// Fetch event - cache first, then network
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
 
-  const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
 
-  if (request.mode === "navigate") {
-    event.respondWith(caches.match("/index.html").then((r) => r || fetch(request)));
-    return;
-  }
+      return fetch(event.request).then((response) => {
+        // Don't cache if not a valid response or if it's from another origin
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
 
-  if (url.pathname.startsWith("/content/")) {
-    event.respondWith(
-      fetch(request)
-        .then((networkRes) => {
-          const copy = networkRes.clone();
-          caches.open(DYNAMIC_CACHE).then((cache) => cache.put(request, copy));
-          return networkRes;
-        })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match("/content/home.html")),
-        ),
-    );
-    return;
-  }
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
 
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+        return response;
+      }).catch(() => {
+        // Offline fallback for navigation
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+      });
+    })
+  );
 });
 
-self.addEventListener("push", (event) => {
-  let data = { title: "Новое уведомление", body: "", reminderId: null };
-  try {
-    if (event.data) data = event.data.json();
-  } catch {}
+// Push event - showing notification
+self.addEventListener('push', (event) => {
+  console.log('[SW] Push received');
+  let data = {};
+  if (event.data) {
+    data = event.data.json();
+  }
 
+  const title = data.title || 'Напоминание';
   const options = {
-    body: data.body,
-    icon: "/icons/icon-192.png",
-    badge: "/icons/icon-192.png",
-    data: { url: "/", reminderId: data.reminderId ?? null },
+    body: data.body || 'Пора сделать дело!',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: {
+      url: '/',
+      reminderId: data.reminderId
+    }
   };
 
   if (data.reminderId) {
-    options.actions = [{ action: "snooze", title: "Отложить на 5 минут" }];
+    options.actions = [
+      { action: 'snooze', title: 'Отложить на 5 мин' }
+    ];
   }
 
-  event.waitUntil(self.registration.showNotification(data.title, options));
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
 });
 
-self.addEventListener("notificationclick", (event) => {
+// Notification click event
+self.addEventListener('notificationclick', (event) => {
   const notification = event.notification;
   const action = event.action;
 
-  if (action === "snooze") {
-    const reminderId = notification?.data?.reminderId;
+  if (action === 'snooze') {
+    const reminderId = notification.data.reminderId;
     notification.close();
-    if (!reminderId) return;
+    
     event.waitUntil(
-      fetch(`/snooze?reminderId=${encodeURIComponent(reminderId)}`, { method: "POST" }).catch((err) =>
-        console.error("Snooze failed:", err),
-      ),
+      fetch(`http://localhost:3001/snooze?reminderId=${encodeURIComponent(reminderId)}`, {
+        method: 'POST'
+      }).catch(err => console.error('[SW] Snooze fetch failed', err))
     );
     return;
   }
 
   notification.close();
-  const url = notification?.data?.url || "/";
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.focus();
-          return;
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
         }
       }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    }),
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
   );
 });

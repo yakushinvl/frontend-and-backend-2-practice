@@ -1,19 +1,18 @@
 const STORAGE_KEY = "todos-v1";
+const VAPID_PUBLIC_KEY = "BCxdOsmll-UVV-NbEEkj1M9jST-8pq-Avo_GhlNbF_uZkvcyekYbPtqxDZwMYjE16QFiZXK44fSwEUMa5-38voQ";
+const SERVER_URL = "https://localhost:3001";
 
 const swStatus = document.getElementById("sw-status");
 const content = document.getElementById("app-content");
 const homeBtn = document.getElementById("home-btn");
 const aboutBtn = document.getElementById("about-btn");
-
 const enablePushBtn = document.getElementById("enable-push");
 const disablePushBtn = document.getElementById("disable-push");
 
-const VAPID_PUBLIC_KEY = "BHeMVmh1nkIK6Qr-BxLBFmz_KcFcKG5XT9VXHraT0WIV8r0yY86fOCnmsIF-EuKNpX-HIGZuJXGmm1VPZSwfR3M";
-
-/** @type {ReturnType<typeof io> | null} */
 let socket = null;
 let currentListEl = null;
 
+// --- Utils ---
 function toast(message) {
   const el = document.createElement("div");
   el.textContent = message;
@@ -26,19 +25,9 @@ function toast(message) {
   setTimeout(() => el.remove(), 3000);
 }
 
-function setActive(active) {
-  homeBtn.classList.toggle("active", active === "home");
-  aboutBtn.classList.toggle("active", active === "about");
-}
-
 function loadTodos() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : [];
 }
 
 function saveTodos(todos) {
@@ -46,73 +35,57 @@ function saveTodos(todos) {
 }
 
 function uid() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-function upsertRemoteTask(task) {
-  if (!task?.id || !task?.text) return;
-  const todos = loadTodos();
-  const exists = todos.some((t) => t.id === task.id);
-  if (exists) return;
-  todos.unshift({
-    id: task.id,
-    text: task.text,
-    done: false,
-    createdAt: task.createdAt ?? Date.now(),
-    reminder: task.reminder ?? null,
-  });
-  saveTodos(todos);
-  if (currentListEl) render(currentListEl);
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
 }
 
+// --- Logic ---
 function render(list) {
   const todos = loadTodos();
   list.innerHTML = "";
-
-  for (const todo of todos) {
+  todos.forEach(todo => {
     const li = document.createElement("li");
-    li.className = todo.done ? "done" : "";
-    li.dataset.id = todo.id;
-
+    if (todo.done) li.className = "done";
+    
     const cb = document.createElement("input");
     cb.type = "checkbox";
-    cb.checked = Boolean(todo.done);
-    cb.addEventListener("change", () => toggle(todo.id));
+    cb.checked = !!todo.done;
+    cb.onclick = () => {
+      const all = loadTodos();
+      const t = all.find(x => x.id === todo.id);
+      if (t) t.done = !t.done;
+      saveTodos(all);
+      render(list);
+    };
 
     const text = document.createElement("span");
-    const reminderPart =
-      todo.reminder && Number.isFinite(todo.reminder)
-        ? ` (напомнить: ${new Date(todo.reminder).toLocaleString()})`
-        : "";
-    text.textContent = `${todo.text}${reminderPart}`;
+    let reminderText = "";
+    if (todo.reminder) {
+      reminderText = ` (⏰ ${new Date(todo.reminder).toLocaleString()})`;
+    }
+    text.textContent = todo.text + reminderText;
 
     const del = document.createElement("button");
-    del.type = "button";
     del.textContent = "Удалить";
-    del.addEventListener("click", () => remove(todo.id));
+    del.onclick = () => {
+      const all = loadTodos().filter(x => x.id !== todo.id);
+      saveTodos(all);
+      render(list);
+    };
 
     li.append(cb, text, del);
     list.append(li);
-  }
-}
-
-function add(text) {
-  const todos = loadTodos();
-  todos.unshift({ id: uid(), text, done: false, createdAt: Date.now() });
-  saveTodos(todos);
-}
-
-function toggle(id) {
-  const todos = loadTodos();
-  const t = todos.find((x) => x.id === id);
-  if (!t) return;
-  t.done = !t.done;
-  saveTodos(todos);
-}
-
-function remove(id) {
-  const todos = loadTodos().filter((x) => x.id !== id);
-  saveTodos(todos);
+  });
 }
 
 function initTodos() {
@@ -123,183 +96,152 @@ function initTodos() {
   const reminderTime = document.getElementById("reminder-time");
   const list = document.getElementById("todo-list");
 
-  if (!form || !input || !list) return;
+  if (!list) return;
   currentListEl = list;
+  render(list);
 
-  function rerender() {
-    render(list);
+  if (form) {
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const val = input.value.trim();
+      if (!val) return;
+      const todo = { id: uid(), text: val, done: false, createdAt: Date.now() };
+      const all = loadTodos();
+      all.unshift(todo);
+      saveTodos(all);
+      if (socket) socket.emit("newTask", todo);
+      input.value = "";
+      render(list);
+    };
   }
 
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = input.value.trim();
-    if (!text) return;
-    const id = uid();
-    const createdAt = Date.now();
-    const todos = loadTodos();
-    todos.unshift({ id, text, done: false, createdAt, reminder: null });
-    saveTodos(todos);
-
-    if (socket) socket.emit("newTask", { id, text, createdAt });
-    input.value = "";
-    input.focus();
-    rerender();
-  });
-
-  if (reminderForm && reminderText && reminderTime) {
-    reminderForm.addEventListener("submit", (e) => {
+  if (reminderForm) {
+    reminderForm.onsubmit = (e) => {
       e.preventDefault();
       const text = reminderText.value.trim();
-      const datetime = reminderTime.value;
-      if (!text || !datetime) return;
+      const time = reminderTime.value;
+      if (!text || !time) return;
 
-      const reminderTimestamp = new Date(datetime).getTime();
-      if (!Number.isFinite(reminderTimestamp) || reminderTimestamp <= Date.now()) {
-        alert("Дата напоминания должна быть в будущем");
+      const ts = new Date(time).getTime();
+      if (ts <= Date.now()) {
+        alert("Время должно быть в будущем");
         return;
       }
 
-      const id = uid();
-      const createdAt = Date.now();
-      const todos = loadTodos();
-      todos.unshift({ id, text, done: false, createdAt, reminder: reminderTimestamp });
-      saveTodos(todos);
+      const todo = { id: uid(), text, done: false, createdAt: Date.now(), reminder: ts };
+      const all = loadTodos();
+      all.unshift(todo);
+      saveTodos(all);
 
-      if (socket) {
-        socket.emit("newReminder", { id, text, reminderTime: reminderTimestamp });
-      }
+      if (socket) socket.emit("newReminder", { id: todo.id, text, reminderTime: ts });
 
       reminderText.value = "";
       reminderTime.value = "";
-      rerender();
-    });
+      render(list);
+    };
   }
-
-  rerender();
 }
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
-}
-
-async function subscribeToPush() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-  });
-  await fetch("http://localhost:3001/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(subscription),
-  });
-}
-
-async function unsubscribeFromPush() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
-  const registration = await navigator.serviceWorker.ready;
-  const subscription = await registration.pushManager.getSubscription();
-  if (!subscription) return;
-
-  await fetch("http://localhost:3001/unsubscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ endpoint: subscription.endpoint }),
-  });
-  await subscription.unsubscribe();
-}
-
-function initSocket() {
-  if (typeof window.io !== "function") return;
-  socket = window.io("http://localhost:3001");
-
-  socket.on("connect", () => {
-    swStatus.textContent = swStatus.textContent || "Подключено.";
-  });
-
-  socket.on("taskAdded", (task) => {
-    toast(`Новая задача: ${task?.text ?? ""}`);
-    upsertRemoteTask(task);
-  });
-}
-
-async function loadContent(page) {
+async function loadPage(page) {
+  homeBtn.classList.toggle("active", page === "home");
+  aboutBtn.classList.toggle("active", page === "about");
+  
   try {
-    const res = await fetch(`/content/${page}.html`, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(`/content/${page}.html`);
     content.innerHTML = await res.text();
-
     if (page === "home") initTodos();
-  } catch (e) {
-    content.innerHTML = "<p>Ошибка загрузки страницы.</p>";
-    console.error(e);
+  } catch (err) {
+    content.innerHTML = "<p>Ошибка загрузки страницы</p>";
   }
 }
 
-homeBtn.addEventListener("click", () => {
-  setActive("home");
-  loadContent("home");
-});
-
-aboutBtn.addEventListener("click", () => {
-  setActive("about");
-  loadContent("about");
-});
-
-setActive("home");
-loadContent("home");
-
-async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) {
-    swStatus.textContent = "Service Worker не поддерживается.";
-    return;
-  }
-
+async function subscribe() {
   try {
-    const reg = await navigator.serviceWorker.register("/sw.js");
-    swStatus.textContent = "Service Worker зарегистрирован.";
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
 
-    if (enablePushBtn && disablePushBtn) {
-      const existing = await reg.pushManager.getSubscription();
-      enablePushBtn.style.display = existing ? "none" : "inline-block";
-      disablePushBtn.style.display = existing ? "inline-block" : "none";
+    await fetch(`${SERVER_URL}/subscribe`, {
+      method: 'POST',
+      body: JSON.stringify(sub),
+      headers: { 'Content-Type': 'application/json' }
+    });
 
-      enablePushBtn.addEventListener("click", async () => {
-        if (Notification.permission === "denied") {
-          alert("Уведомления запрещены. Разрешите их в настройках браузера.");
-          return;
-        }
-        if (Notification.permission === "default") {
-          const permission = await Notification.requestPermission();
-          if (permission !== "granted") {
-            alert("Необходимо разрешить уведомления.");
-            return;
-          }
-        }
-        await subscribeToPush();
-        enablePushBtn.style.display = "none";
-        disablePushBtn.style.display = "inline-block";
-      });
+    enablePushBtn.style.display = "none";
+    disablePushBtn.style.display = "inline-block";
+    toast("Уведомления включены");
+  } catch (err) {
+    console.error("Subscription failed", err);
+  }
+}
 
-      disablePushBtn.addEventListener("click", async () => {
-        await unsubscribeFromPush();
-        disablePushBtn.style.display = "none";
-        enablePushBtn.style.display = "inline-block";
+async function unsubscribe() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await sub.unsubscribe();
+      await fetch(`${SERVER_URL}/unsubscribe`, {
+        method: 'POST',
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+        headers: { 'Content-Type': 'application/json' }
       });
     }
-  } catch (e) {
-    swStatus.textContent = "Service Worker: ошибка регистрации (см. консоль).";
-    console.error(e);
+    enablePushBtn.style.display = "inline-block";
+    disablePushBtn.style.display = "none";
+    toast("Уведомления выключены");
+  } catch (err) {
+    console.error("Unsubscription failed", err);
   }
 }
 
-window.addEventListener("load", () => {
-  initSocket();
-  registerServiceWorker();
+// --- Init ---
+window.addEventListener("load", async () => {
+  console.log("App loaded, starting initialization...");
+
+  // SW Registration
+  if ("serviceWorker" in navigator) {
+    try {
+      console.log("Registering Service Worker...");
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      console.log("Service Worker registered successfully with scope:", reg.scope);
+      swStatus.textContent = "Service Worker активен";
+      
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        enablePushBtn.style.display = "none";
+        disablePushBtn.style.display = "inline-block";
+      }
+    } catch (err) {
+      console.error("Service Worker registration failed:", err);
+      swStatus.textContent = "Ошибка Service Worker: " + err.message + ". Попробуйте открыть https://localhost:5174/sw.js и подтвердить сертификат.";
+    }
+  } else {
+    swStatus.textContent = "Service Worker не поддерживается";
+  }
+
+  // Socket
+  if (window.io) {
+    try {
+      socket = window.io(SERVER_URL, {
+        rejectUnauthorized: false // Allow self-signed certs for socket.io
+      });
+      socket.on("connect", () => console.log("Socket connected"));
+      socket.on("taskAdded", (task) => {
+        toast("Новая задача: " + task.text);
+      });
+    } catch (err) {
+      console.error("Socket.io initialization failed:", err);
+    }
+  }
+
+  // UI Events
+  homeBtn.onclick = () => loadPage("home");
+  aboutBtn.onclick = () => loadPage("about");
+  enablePushBtn.onclick = subscribe;
+  disablePushBtn.onclick = unsubscribe;
+
+  loadPage("home");
 });

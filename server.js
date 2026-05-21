@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
-const http = require("http");
+const https = require("https");
+const fs = require("fs");
 const path = require("path");
 const cors = require("cors");
 const { Server } = require("socket.io");
@@ -27,7 +28,12 @@ let subscriptions = [];
 // Активные напоминания: id -> { timeoutId, text, reminderTime }
 const reminders = new Map();
 
-const server = http.createServer(app);
+const options = {
+    key: fs.readFileSync("localhost-key.pem"),
+    cert: fs.readFileSync("localhost.pem"),
+};
+
+const server = https.createServer(options, app);
 const io = new Server(server, {
     cors: { origin: "*", methods: ["GET", "POST"] },
 });
@@ -129,6 +135,6 @@ app.post("/snooze", (req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`Сервер запущен на http://localhost:${PORT}`);
+    console.log(`Сервер запущен на https://localhost:${PORT}`);
 });
 
