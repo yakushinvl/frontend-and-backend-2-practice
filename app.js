@@ -8,7 +8,7 @@ const aboutBtn = document.getElementById("about-btn");
 const enablePushBtn = document.getElementById("enable-push");
 const disablePushBtn = document.getElementById("disable-push");
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PUBLIC_KEY = "BHeMVmh1nkIK6Qr-BxLBFmz_KcFcKG5XT9VXHraT0WIV8r0yY86fOCnmsIF-EuKNpX-HIGZuJXGmm1VPZSwfR3M";
 
 /** @type {ReturnType<typeof io> | null} */
 let socket = null;
@@ -194,7 +194,7 @@ async function subscribeToPush() {
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
   });
-  await fetch("/subscribe", {
+  await fetch("http://localhost:3001/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(subscription),
@@ -207,7 +207,7 @@ async function unsubscribeFromPush() {
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
 
-  await fetch("/unsubscribe", {
+  await fetch("http://localhost:3001/unsubscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ endpoint: subscription.endpoint }),
@@ -217,7 +217,7 @@ async function unsubscribeFromPush() {
 
 function initSocket() {
   if (typeof window.io !== "function") return;
-  socket = window.io();
+  socket = window.io("http://localhost:3001");
 
   socket.on("connect", () => {
     swStatus.textContent = swStatus.textContent || "Подключено.";

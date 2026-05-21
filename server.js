@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const path = require("path");
@@ -12,7 +13,7 @@ const vapidKeys = {
     privateKey: process.env.VAPID_PRIVATE_KEY,
 };
 
-webpush.setVapidDetails("mailto:student@example.com", vapidKeys.publicKey, vapidKeys.privateKey);
+webpush.setVapidDetails("mailto:mail@mail.ru", vapidKeys.publicKey, vapidKeys.privateKey);
 
 const app = express();
 app.use(cors());
