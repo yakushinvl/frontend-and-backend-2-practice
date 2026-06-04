@@ -1,0 +1,59 @@
+$border: rgba(255, 255, 255, 0.10);
+$panel: rgba(255, 255, 255, 0.03);
+$text: #e7eaf3;
+$primary: rgba(99, 102, 241, 0.55);
+$primaryBg: rgba(99, 102, 241, 0.18);
+
+.authContainer {
+  max-width: 520px;
+}
+
+.authHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  .title {
+    margin: 0;
+    font-size: 20px;
+    color: $text;
+  }
+}
+
+.authCard {
+  border-radius: 16px;
+  border: 1px solid $border;
+  background: $panel;
+  padding: 12px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid $border;
+  background: rgba(255, 255, 255, 0.02);
+
+  &__btn {
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: $text;
+    cursor: pointer;
+    opacity: 0.85;
+
+    &.isActive {
+      opacity: 1;
+      background: $primaryBg;
+      border-color: $primary;
+    }
+  }
+}
+
+.authActions {
+  display: flex;
+  justify-content: flex-end;
+}
