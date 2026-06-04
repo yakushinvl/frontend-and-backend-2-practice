@@ -17,3 +17,9 @@
 - сгенерированы APID ключи, добавил подписку на Push-уведомления и связанный с этим интерфейс - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/10d245610485fbad151cfc4b1eaefb4860924779)
 - добавлена возможность создавать отложенные напоминания - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/ee8071ef39abc141c95c774409dc33e91aa20dcc)
 ### Контрольная работа №4 - текущая версия
+Разработаны:
+- API для работы с PostgreSQL - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/388281480a2db4ffafafc1b210ac10264f542682)
+- API для работы с MongoDB - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/235c374a126b3556ba9ed8f430d0e4a8c1e2aed0)
+- кэширование запросов для ПР №11 (КР №2) - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/a28a42ca858fb97a4f17c44b25691c48c2701c74)
+- балансировщик нагрузки Nginx - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/72f67ac843a4295e929573c16987231221b27e97)
+- упакован балансировщик в Docker - [коммит](https://github.com/yakushinvl/frontend-and-backend-2-practice/commit/5c80079602256d531d814a7d32c4119cc450ddfa)
