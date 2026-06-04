@@ -1,65 +1,30 @@
 require('dotenv').config();
 const express = require('express');
-const { Sequelize, DataTypes } = require('sequelize');
+const mongoose = require('mongoose');
 
 const app = express();
 app.use(express.json());
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME || 'postgres',
-  process.env.DB_USER || 'postgres',
-  process.env.DB_PASSWORD || 'postgres',
-  {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    dialect: 'postgres',
-    logging: false,
-    dialectOptions: process.env.DB_SSL === 'true' ? {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false
-      }
-    } : {}
-  }
-);
+const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/db_fb_nosql';
 
-const User = sequelize.define('User', {
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true
-  },
-  first_name: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  last_name: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  age: {
-    type: DataTypes.INTEGER,
-    allowNull: false
-  },
-  created_at: {
-    type: DataTypes.BIGINT,
-    defaultValue: () => Math.floor(Date.now() / 1000)
-  },
-  updated_at: {
-    type: DataTypes.BIGINT,
-    defaultValue: () => Math.floor(Date.now() / 1000)
-  }
-}, {
-  timestamps: false
+mongoose.connect(mongoUri)
+  .then(() => console.log('Подключено к MongoDB'))
+  .catch(err => console.error('Ошибка подключения к MongoDB:', err));
+
+const userSchema = new mongoose.Schema({
+  first_name: { type: String, required: true },
+  last_name: { type: String, required: true },
+  age: { type: Number, required: true },
+  created_at: { type: Number, default: () => Math.floor(Date.now() / 1000) },
+  updated_at: { type: Number, default: () => Math.floor(Date.now() / 1000) }
 });
 
-User.beforeUpdate((user) => {
-  user.updated_at = Math.floor(Date.now() / 1000);
+userSchema.pre('findOneAndUpdate', function(next) {
+  this._update.updated_at = Math.floor(Date.now() / 1000);
+  next();
 });
 
-sequelize.sync().then(() => {
-  console.log('БД синхронизирована');
-});
+const User = mongoose.model('User', userSchema);
 
 app.post('/api/users', async (req, res) => {
   try {
@@ -67,7 +32,8 @@ app.post('/api/users', async (req, res) => {
     if (!first_name || !last_name || !age) {
       return res.status(400).json({ error: 'Необходимы поля first_name, last_name, age' });
     }
-    const user = await User.create({ first_name, last_name, age });
+    const user = new User({ first_name, last_name, age });
+    await user.save();
     res.status(201).json(user);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -76,7 +42,7 @@ app.post('/api/users', async (req, res) => {
 
 app.get('/api/users', async (req, res) => {
   try {
-    const users = await User.findAll();
+    const users = await User.find();
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -85,7 +51,7 @@ app.get('/api/users', async (req, res) => {
 
 app.get('/api/users/:id', async (req, res) => {
   try {
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'Юзер не найден' });
     }
@@ -97,14 +63,15 @@ app.get('/api/users/:id', async (req, res) => {
 
 app.patch('/api/users/:id', async (req, res) => {
   try {
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'Юзер не найден' });
     }
-
-    const updateData = { ...req.body, updated_at: Math.floor(Date.now() / 1000) };
-    await user.update(updateData);
     
+    Object.assign(user, req.body);
+    user.updated_at = Math.floor(Date.now() / 1000);
+    
+    await user.save();
     res.json(user);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -113,11 +80,10 @@ app.patch('/api/users/:id', async (req, res) => {
 
 app.delete('/api/users/:id', async (req, res) => {
   try {
-    const user = await User.findByPk(req.params.id);
+    const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'Юзер не найден' });
     }
-    await user.destroy();
     res.json({ message: 'Юзер удалён' });
   } catch (error) {
     res.status(500).json({ error: error.message });
